@@ -93,13 +93,31 @@ bool mqttConnected = false;
 bool mqttEnabled = false;
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-    // 将payload转为字符串（非null-terminated，需手动截断）
     char buf[64];
     unsigned int copyLen = (length < 63) ? length : 63;
     memcpy(buf, payload, copyLen);
     buf[copyLen] = '\0';
     
     Serial.printf("[MQTT] 收到命令: %s\n", buf);
+    
+    // 校验设备ID：查找 "id":"XXXXXX"
+    char* idPos = strstr(buf, "\"id\"");
+    if (!idPos) {
+        Serial.println("[MQTT] 命令中未找到id字段，忽略");
+        return;
+    }
+    char* idColon = strchr(idPos, ':');
+    if (!idColon) return;
+    char* idStart = strchr(idColon, '\"');
+    if (!idStart) return;
+    idStart++;  // 跳过引号
+    char* idEnd = strchr(idStart, '\"');
+    if (!idEnd) return;
+    int idLen = idEnd - idStart;
+    if (idLen != 6 || strncmp(idStart, deviceId, 6) != 0) {
+        Serial.printf("[MQTT] 设备ID不匹配(期望:%s 收到:%.*s)，忽略\n", deviceId, idLen, idStart);
+        return;
+    }
     
     // 简易JSON解析：查找 "duty" 字段
     char* dutyPos = strstr(buf, "\"duty\"");
