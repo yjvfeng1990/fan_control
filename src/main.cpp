@@ -263,7 +263,8 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:#07111F;color:#C8D6E5;
 .btn-outline{background:transparent;border:1px solid #1B2A3F;color:#5A6D80}
 .btn-outline:hover{border-color:#00D8FF;color:#00D8FF}
 /* Chart */
-.chart-panel{grid-column:1/-1}
+.chart-panel{grid-column:1/-1;margin-bottom:16px}
+#rpmChart{display:block;width:100%}
 .chart-tabs{display:flex;gap:6px;margin-bottom:12px}
 .chart-tab{padding:5px 14px;border-radius:14px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #1B2A3F;background:transparent;color:#5A6D80;transition:all .2s}
 .chart-tab.active,.chart-tab:hover{background:#00D8FF1A;border-color:#00D8FF;color:#00D8FF}
