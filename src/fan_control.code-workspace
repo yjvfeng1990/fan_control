@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "D:/develop/ESP32/ESP-12E/fan_control"
+		},
+		{
+			"name": "fan_control",
+			"path": ".."
+		}
+	],
+	"settings": {}
+}

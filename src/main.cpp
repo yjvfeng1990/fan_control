@@ -91,6 +91,10 @@ PubSubClient mqttClient(espClient);
 unsigned long lastMqttPublish = 0;
 bool mqttConnected = false;
 bool mqttEnabled = false;
+unsigned long lastMqttReconnectAttempt = 0;
+unsigned long mqttReconnectInterval = 5000;  // 初始5秒重连间隔
+#define MQTT_RECONNECT_MIN    5000UL   // 最小重连间隔 5秒
+#define MQTT_RECONNECT_MAX    60000UL  // 最大重连间隔 60秒
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
     char buf[64];
@@ -163,6 +167,8 @@ bool tryMQTTConnect() {
     String clientId = "FanCtrl_" + WiFi.macAddress();
     if (mqttClient.connect(clientId.c_str())) {
         Serial.println("成功");
+        // 成功连接后重置重连间隔
+        mqttReconnectInterval = MQTT_RECONNECT_MIN;
         // 订阅命令主题
         if (strlen(mqttConfig.cmdTopic) > 0) {
             mqttClient.subscribe(mqttConfig.cmdTopic);
@@ -171,6 +177,9 @@ bool tryMQTTConnect() {
         return true;
     }
     Serial.printf("失败(rc=%d)\n", mqttClient.state());
+    // 失败后加倍重连间隔（最大60秒）
+    mqttReconnectInterval = min(mqttReconnectInterval * 2, MQTT_RECONNECT_MAX);
+    Serial.printf("[MQTT] 下次重连将在 %lu 秒后\n", mqttReconnectInterval / 1000);
     return false;
 }
 
@@ -1198,23 +1207,35 @@ void loop() {
         }
     }
     
-    // MQTT：STA连接时自动启用，STA断开时禁用。连接只尝试一次（阻塞~2s可接受）
+    // MQTT：STA连接时自动启用，STA断开时禁用
     if (!staConnected && mqttEnabled) {
         mqttEnabled = false;
         mqttConnected = false;
+        mqttReconnectInterval = MQTT_RECONNECT_MIN;
     }
     if (staConnected && mqttConfig.enabled && !mqttEnabled) {
         mqttEnabled = true;
-        mqttConnected = tryMQTTConnect();  // 仅连接一次，阻塞2秒
+        mqttConnected = tryMQTTConnect();
     }
     
-    if (mqttEnabled && mqttConnected) {
-        mqttClient.loop();
-        unsigned int mqttInterval = mqttConfig.interval * 1000;  // 秒->毫秒
-        if (mqttInterval < 1000) mqttInterval = 5000;  // 最小1秒，默认5秒
-        if (now - lastMqttPublish >= mqttInterval) {
-            publishMQTT();
-            lastMqttPublish = now;
+    // MQTT 主循环 + 断线重连
+    if (mqttEnabled) {
+        if (mqttClient.connected()) {
+            mqttConnected = true;
+            mqttClient.loop();
+            unsigned int mqttInterval = mqttConfig.interval * 1000;  // 秒->毫秒
+            if (mqttInterval < 1000) mqttInterval = 5000;
+            if (now - lastMqttPublish >= mqttInterval) {
+                publishMQTT();
+                lastMqttPublish = now;
+            }
+        } else {
+            mqttConnected = false;
+            // 按重连间隔尝试重连
+            if (now - lastMqttReconnectAttempt >= mqttReconnectInterval) {
+                lastMqttReconnectAttempt = now;
+                tryMQTTConnect();
+            }
         }
     }
     
